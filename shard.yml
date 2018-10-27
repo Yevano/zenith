@@ -1,0 +1,6 @@
+name: zenith
+version: 0.0.1
+
+dependencies:
+  pegasus:
+    github: pawandubey/pegasus

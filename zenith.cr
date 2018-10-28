@@ -420,6 +420,40 @@ def truth_value(cnf : ConjunctiveNormalForm) : Bool?
     return false
 end
 
+def apply_substitution(term : Term, variable : Variable, substitute : Term) : Term
+    case term
+    when Variable
+        term == variable ? substitute : term
+    when Bool
+        term
+    else
+        term.recurse(->(t : Term) { apply_substitution(t, variable, substitute) })
+    end
+end
+
+def beta_reduce(application : Application) : Term
+    lhs = application.lhs
+    case lhs
+    when Application
+        beta_reduce(Application.new(beta_reduce(lhs), application.rhs))
+    when Abstraction
+        apply_substitution(lhs.body, lhs.variable, application.rhs)
+    else
+        application
+    end
+end
+
+def abstraction(constraint : Term, name : String, &block : Variable -> Term)
+    v = Variable.new(name)
+    Abstraction.new(v, constraint, block.call(v))
+end
+
+macro lm(variable, constraint, block)
+    abstraction({{ constraint }}, "{{ variable.name }}") { |{{ variable }}|
+        {{ block }}
+    }
+end
+
 macro make_term(expr)
     {% if expr.class_name == "Call" %}
         {% if expr.name == "-" %}

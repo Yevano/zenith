@@ -459,13 +459,7 @@ macro make_term(expr)
         {% if expr.name == "-" %}
             {% lhs = expr.receiver %}
             {% rhs = expr.args[0] %}
-            {% if lhs.class_name == "Call" && lhs.name == "-" %}
-                Implication.new(
-                    make_term({{ lhs.receiver }}),
-                    Implication.new(make_term({{ lhs.args[0] }}), make_term({{ rhs }})))
-            {% else %}
-                Implication.new(make_term({{ lhs }}), make_term({{ rhs }}))
-            {% end %}
+            Implication.new(make_term({{ lhs }}), make_term({{ rhs }}))
         {% elsif expr.name == "+" %}
             Disjunction.new(make_term({{ expr.receiver }}), make_term({{ expr.args[0] }}))
         {% elsif expr.name == "*" %}

@@ -464,6 +464,8 @@ macro make_term(expr)
             Disjunction.new(make_term({{ expr.receiver }}), make_term({{ expr.args[0] }}))
         {% elsif expr.name == "*" %}
             Conjunction.new(make_term({{ expr.receiver }}), make_term({{ expr.args[0] }}))
+        {% elsif expr.name == "|" %}
+            Application.new(make_term({{ expr.receiver }}), make_term({{ expr.args[0] }}))
         {% end %}
     {% elsif expr.class_name == "Not" %}
         Negation.new(make_term({{ expr.exp }}))

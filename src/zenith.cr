@@ -165,6 +165,7 @@ class ExistentialQuantification
 end
 
 class Abstraction
+    property origin = Set(Variable).new
     property variable : Variable
     property constraint : Term
     property body : Term
@@ -180,7 +181,7 @@ class Abstraction
     end
 
     def to_s(io)
-        io << "(λ#{@variable}: #{@constraint}. #{@body})"
+        io << "(#{origin.to_a.map { |e| e.to_s }} λ#{@variable}: #{@constraint}. #{@body})"
     end
 
     def ==(other : Abstraction)
@@ -229,6 +230,24 @@ alias Term =
     ExistentialQuantification   |
     Abstraction                 |
     Application
+
+def to_origin(term : Term) : Term
+    case term
+    when Bool, Variable
+        term
+    when Abstraction
+        if term.origin.size > 0
+            abs = Abstraction.new(term.variable, term.constraint, term.body)
+            arr = term.origin.to_a
+            arr.skip(1).each { |e| abs.origin.add e }
+            Disjunction.new(arr[0], to_origin(abs))
+        else
+            term
+        end
+    else
+        term.recurse(->to_origin(Term))
+    end
+end
 
 def elim_impl(term : Term) : Term
     case term
@@ -302,24 +321,24 @@ def apply_until_constant(term : Term, f : Term -> Term) : Term
     new_term
 end
 
-class NegatableVariable
+class NegatableTerm
     property truth : Bool
-    property variable : Variable
+    property variable : Term
 
-    def initialize(truth : Bool, variable : Variable)
+    def initialize(truth : Bool, variable : Term)
         @truth = truth
         @variable = variable
     end
 
     def to_s(io)
-        io << (truth ? variable.to_s : "¬#{variable.to_s}")
+        io << (truth ? variable : "¬#{variable}")
     end
 end
 
-alias AtomicTerm = Bool | NegatableVariable
+alias AtomicTerm = Bool | NegatableTerm | Abstraction
 alias ConjunctiveNormalForm = Set(Set(AtomicTerm))
-alias ConjunctiveTree = Bool | Variable | Conjunction
-alias DisjunctiveTree = Bool | Variable | Negation | Disjunction
+alias ConjunctiveTree = Bool | Variable | Conjunction | Abstraction
+alias DisjunctiveTree = Bool | Variable | Negation | Disjunction | Abstraction
 
 def conjunctive_tree_to_set(tree : ConjunctiveTree) : Set(DisjunctiveTree)
     case tree
@@ -357,13 +376,18 @@ def disjunctive_tree_to_set(tree : DisjunctiveTree) : Set(AtomicTerm)
     when Bool
         Set(AtomicTerm) { tree }
     when Variable
-        Set(AtomicTerm) { NegatableVariable.new(true, tree) }
+        Set(AtomicTerm) { NegatableTerm.new(true, tree) }
+    when Abstraction
+        Set(AtomicTerm).new() | tree.origin.map { |e| NegatableTerm.new(true, e) }.to_set
     when Negation
         rhs = tree.rhs
-        if rhs.is_a? Variable
-            Set(AtomicTerm) { NegatableVariable.new(false, rhs) }
+        case rhs
+        when Variable
+            Set(AtomicTerm) { NegatableTerm.new(false, rhs) }
+        when Abstraction
+            Set(AtomicTerm).new() | rhs.origin.map { |e| NegatableTerm.new(false, e) }.to_set
         else
-            raise "Problem!"
+            raise "Problem1!"
         end
     when Disjunction
         lhs = tree.lhs
@@ -372,10 +396,11 @@ def disjunctive_tree_to_set(tree : DisjunctiveTree) : Set(AtomicTerm)
         when { DisjunctiveTree, DisjunctiveTree }
             disjunctive_tree_to_set(lhs) | disjunctive_tree_to_set(rhs)
         else
-            raise "Problem!"
+            puts("#{lhs}, #{rhs}")
+            raise "Problem2!"
         end
     else
-        raise "Problem!"  
+        raise "Problem3!"
     end
 end
 
@@ -396,8 +421,8 @@ def truth_value(disjunctive : Set(AtomicTerm)) : Bool?
 
     disjunctive.each { |atomic_term|
         disjunctive.select { |x| x != atomic_term }.each { |t|
-            if atomic_term.is_a? NegatableVariable
-                if t.is_a? NegatableVariable
+            if atomic_term.is_a? NegatableTerm
+                if t.is_a? NegatableTerm
                     if atomic_term.variable == t.variable && atomic_term.truth != t.truth
                         return true
                     end
@@ -433,13 +458,47 @@ end
 
 def beta_reduce(application : Application) : Term
     lhs = application.lhs
+    rhs = application.rhs
     case lhs
     when Application
         beta_reduce(Application.new(beta_reduce(lhs), application.rhs))
     when Abstraction
-        apply_substitution(lhs.body, lhs.variable, application.rhs)
+        if reduce_fol(Implication.new(application.rhs, lhs.constraint))
+            case rhs
+            when Abstraction
+                rhs.origin.add(lhs.variable)
+            end
+            apply_substitution(lhs.body, lhs.variable, application.rhs)
+        else
+            raise "Tried to apply #{lhs} to #{application.rhs}. Constraint not proven."
+        end
     else
         application
+    end
+end
+
+def reduce_fol(term : Term) : Bool?
+    term = apply_until_constant(term, ->to_origin(Term)) 
+    term = apply_until_constant(term, ->elim_impl(Term))
+    term = apply_until_constant(term, ->de_morgan(Term))
+    term = apply_until_constant(term, ->distribute(Term))
+    
+    case term
+    when ConjunctiveTree
+        set = conjunctive_tree_to_set term
+        cnf = set.map { |e|
+            case e
+            when DisjunctiveTree
+                disjunctive_tree_to_set(e)
+            else
+                raise "Problem!"
+            end
+        }.to_set
+        truth_value(cnf)
+    when DisjunctiveTree
+        truth_value(disjunctive_tree_to_set(term))
+    else
+        return nil
     end
 end
 

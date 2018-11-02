@@ -2,5 +2,5 @@ name: zenith
 version: 0.0.1
 
 dependencies:
-    parsec:
-        github: dhruvrajvanshi/crystal-parsec
+    parser_gen:
+        github: Yevano/parser_gen

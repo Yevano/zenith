@@ -177,7 +177,9 @@ class Abstraction
     end
 
     def recurse(f : Term -> Term)
-        Abstraction.new(@variable, f.call(@constraint), f.call(@body))
+        f = Abstraction.new(@variable, f.call(@constraint), f.call(@body))
+        f.origin = @origin
+        f
     end
 
     def to_s(io)
@@ -231,24 +233,6 @@ alias Term =
     Abstraction                 |
     Application
 
-def to_origin(term : Term) : Term
-    case term
-    when Bool, Variable
-        term
-    when Abstraction
-        if term.origin.size > 0
-            abs = Abstraction.new(term.variable, term.constraint, term.body)
-            arr = term.origin.to_a
-            arr.skip(1).each { |e| abs.origin.add e }
-            Disjunction.new(arr[0], to_origin(abs))
-        else
-            term
-        end
-    else
-        term.recurse(->to_origin(Term))
-    end
-end
-
 def elim_impl(term : Term) : Term
     case term
     when Bool, Variable
@@ -276,7 +260,7 @@ def de_morgan(term : Term) : Term
         when Conjunction
             Disjunction.new(Negation.new(de_morgan(term_rhs.lhs)), Negation.new(de_morgan(term_rhs.rhs)))
         else
-            term_rhs.recurse(->de_morgan(Term))
+            Negation.new(term_rhs.recurse(->de_morgan(Term)))
         end
     else
         term.recurse(->de_morgan(Term))
@@ -386,6 +370,8 @@ def disjunctive_tree_to_set(tree : DisjunctiveTree) : Set(AtomicTerm)
             Set(AtomicTerm) { NegatableTerm.new(false, rhs) }
         when Abstraction
             Set(AtomicTerm).new() | rhs.origin.map { |e| NegatableTerm.new(false, e) }.to_set
+        when Bool
+            Set(AtomicTerm) { !rhs }
         else
             raise "Problem1!"
         end
@@ -396,7 +382,6 @@ def disjunctive_tree_to_set(tree : DisjunctiveTree) : Set(AtomicTerm)
         when { DisjunctiveTree, DisjunctiveTree }
             disjunctive_tree_to_set(lhs) | disjunctive_tree_to_set(rhs)
         else
-            puts("#{lhs}, #{rhs}")
             raise "Problem2!"
         end
     else
@@ -478,7 +463,6 @@ def beta_reduce(application : Application) : Term
 end
 
 def reduce_fol(term : Term) : Bool?
-    term = apply_until_constant(term, ->to_origin(Term)) 
     term = apply_until_constant(term, ->elim_impl(Term))
     term = apply_until_constant(term, ->de_morgan(Term))
     term = apply_until_constant(term, ->distribute(Term))

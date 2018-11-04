@@ -48,7 +48,7 @@ class Implication
     end
 
     def to_s(io)
-        io << "(#{lhs} => #{rhs})"
+        io << "(#{lhs} ⇒ #{rhs})"
     end
 
     def ==(other : Implication)
@@ -74,7 +74,7 @@ class Disjunction
     end
 
     def to_s(io)
-        io << "(#{lhs} | #{rhs})"
+        io << "(#{lhs} ∨ #{rhs})"
     end
 
     def ==(other : Disjunction)
@@ -100,7 +100,7 @@ class Conjunction
     end
 
     def to_s(io)
-        io << "(#{lhs} & #{rhs})"
+        io << "(#{lhs} ∧ #{rhs})"
     end
 
     def ==(other : Conjunction)
